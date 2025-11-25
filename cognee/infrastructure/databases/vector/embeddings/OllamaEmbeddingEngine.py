@@ -126,26 +126,26 @@ class OllamaEmbeddingEngine(EmbeddingEngine):
                 async with session.post(
                     self.endpoint, json=payload, headers=headers, timeout=60.0
                 ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(
-                        f"Ollama embedding API returned status {response.status} for endpoint {self.endpoint}. "
-                        f"Error: {error_text}"
-                    )
-                    response.raise_for_status()
-                
-                data = await response.json()
-                
-                # Handle different response formats from Ollama
-                if "embeddings" in data and len(data["embeddings"]) > 0:
-                    return data["embeddings"][0]
-                elif "data" in data and len(data["data"]) > 0 and "embedding" in data["data"][0]:
-                    return data["data"][0]["embedding"]
-                elif "embedding" in data:
-                    return data["embedding"]
-                else:
-                    logger.error(f"Unexpected response format from Ollama: {data}")
-                    raise ValueError(f"Could not extract embedding from Ollama response: {data}")
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(
+                            f"Ollama embedding API returned status {response.status} for endpoint {self.endpoint}. "
+                            f"Error: {error_text}"
+                        )
+                        response.raise_for_status()
+                    
+                    data = await response.json()
+                    
+                    # Handle different response formats from Ollama
+                    if "embeddings" in data and len(data["embeddings"]) > 0:
+                        return data["embeddings"][0]
+                    elif "data" in data and len(data["data"]) > 0 and "embedding" in data["data"][0]:
+                        return data["data"][0]["embedding"]
+                    elif "embedding" in data:
+                        return data["embedding"]
+                    else:
+                        logger.error(f"Unexpected response format from Ollama: {data}")
+                        raise ValueError(f"Could not extract embedding from Ollama response: {data}")
             except aiohttp.ClientError as e:
                 logger.error(
                     f"Failed to connect to Ollama embedding endpoint {self.endpoint}. "
