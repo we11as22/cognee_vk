@@ -100,7 +100,8 @@ async def test_embedding_connection():
         # NOTE: Vector engine import must be done in function to avoid circular import issue
         from cognee.infrastructure.databases.vector import get_vector_engine
 
-        await get_vector_engine().embedding_engine.embed_text("test")
+        # embed_text expects a list of strings, not a single string
+        await get_vector_engine().embedding_engine.embed_text(["test"])
     except Exception as e:
         logger.error(e)
         logger.error("Connection to Embedding handler could not be established.")

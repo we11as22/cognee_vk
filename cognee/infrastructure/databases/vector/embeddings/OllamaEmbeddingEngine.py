@@ -111,6 +111,8 @@ class OllamaEmbeddingEngine(EmbeddingEngine):
         Internal method to call the Ollama embeddings endpoint for a single prompt.
         """
         payload = {"model": self.model, "prompt": prompt, "input": prompt}
+        
+        logger.debug(f"Calling Ollama embedding endpoint: {self.endpoint} with model: {self.model}")
 
         headers = {}
         api_key = os.getenv("LLM_API_KEY")
@@ -120,14 +122,36 @@ class OllamaEmbeddingEngine(EmbeddingEngine):
         ssl_context = create_secure_ssl_context()
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.post(
-                self.endpoint, json=payload, headers=headers, timeout=60.0
-            ) as response:
+            try:
+                async with session.post(
+                    self.endpoint, json=payload, headers=headers, timeout=60.0
+                ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(
+                        f"Ollama embedding API returned status {response.status} for endpoint {self.endpoint}. "
+                        f"Error: {error_text}"
+                    )
+                    response.raise_for_status()
+                
                 data = await response.json()
-                if "embeddings" in data:
+                
+                # Handle different response formats from Ollama
+                if "embeddings" in data and len(data["embeddings"]) > 0:
                     return data["embeddings"][0]
-                else:
+                elif "data" in data and len(data["data"]) > 0 and "embedding" in data["data"][0]:
                     return data["data"][0]["embedding"]
+                elif "embedding" in data:
+                    return data["embedding"]
+                else:
+                    logger.error(f"Unexpected response format from Ollama: {data}")
+                    raise ValueError(f"Could not extract embedding from Ollama response: {data}")
+            except aiohttp.ClientError as e:
+                logger.error(
+                    f"Failed to connect to Ollama embedding endpoint {self.endpoint}. "
+                    f"Please verify that Ollama is running and the endpoint is correct. Error: {e}"
+                )
+                raise
 
     def get_vector_size(self) -> int:
         """
