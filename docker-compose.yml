@@ -1,0 +1,203 @@
+services:
+  cognee:
+    container_name: cognee
+    networks:
+      - cognee-network
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./cognee:/app/cognee
+      - .env:/app/.env
+    env_file:
+      - .env
+    environment:
+      - DEBUG=false # Change to true if debugging
+      - HOST=0.0.0.0
+      - ENVIRONMENT=local
+      - LOG_LEVEL=ERROR
+    depends_on:
+      ollama:
+        condition: service_healthy
+    extra_hosts:
+      # Allows the container to reach your local machine using "host.docker.internal" instead of "localhost"
+      - "host.docker.internal:host-gateway"
+    ports:
+      - 8000:8000
+      - 5678:5678 # Debugger port
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8GB
+
+  # Cognee MCP Server - Model Context Protocol server for IDE integration
+  cognee-mcp:
+    container_name: cognee-mcp
+    profiles:
+      - mcp
+    networks:
+      - cognee-network
+    build:
+      context: .
+      dockerfile: cognee-mcp/Dockerfile
+    volumes:
+      - .env:/app/.env
+    environment:
+      - DEBUG=false # Change to true if debugging
+      - ENVIRONMENT=local
+      - LOG_LEVEL=INFO
+      - TRANSPORT_MODE=sse
+      # Database configuration - should match the main cognee service
+      - DB_PROVIDER=${DB_PROVIDER:-sqlite}
+      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-cognee_db}
+      - DB_USERNAME=${DB_USERNAME:-cognee}
+      - DB_PASSWORD=${DB_PASSWORD:-cognee}
+      # MCP specific configuration
+      - MCP_LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000" # MCP port
+      - "5678:5678" # MCP debugger port
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4GB
+
+  # NOTE: Frontend is a work in progress and supports minimum amount of features required to be functional.
+  # If you want to use Cognee with a UI environment you can integrate the Cognee MCP Server into Cursor / Claude Desktop / Visual Studio Code (through Cline/Roo)
+  frontend:
+    container_name: frontend
+    profiles:
+        - ui
+    build:
+      context: ./cognee-frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./cognee-frontend/src:/app/src
+      - ./cognee-frontend/public:/app/public
+    ports:
+      - 3000:3000
+      # - 9229:9229 # Debugging
+    networks:
+      - cognee-network
+
+  neo4j:
+    image: neo4j:latest
+    container_name: neo4j
+    profiles:
+      - neo4j
+    ports:
+      - 7474:7474
+      - 7687:7687
+    environment:
+      - NEO4J_AUTH=neo4j/pleaseletmein
+      - NEO4J_PLUGINS=["apoc", "graph-data-science"]
+    networks:
+      - cognee-network
+
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: chromadb
+    profiles:
+      - chromadb
+    environment:
+      - IS_PERSISTENT=TRUE
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${VECTOR_DB_KEY}
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=AUTHORIZATION
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+    volumes:
+      - .chromadb_data/:/chroma/chroma/
+    networks:
+      - cognee-network
+    ports:
+      - "3002:8000"
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: postgres
+    profiles:
+      - postgres
+    environment:
+      POSTGRES_USER: cognee
+      POSTGRES_PASSWORD: cognee
+      POSTGRES_DB: cognee_db
+      # - postgres_data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    networks:
+      - cognee-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    profiles:
+      - redis
+    ports:
+      - "6379:6379"
+    networks:
+      - cognee-network
+    volumes:
+      - redis_data:/data
+    command: [ "redis-server", "--appendonly", "yes" ]
+
+
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: redisinsight
+    restart: always
+    ports:
+      - "5540:5540"
+    networks:
+      - cognee-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    networks:
+      - cognee-network
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_TOKEN}
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_ORIGINS=*
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8GB
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    # Pull and prepare the embedding model on startup
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull hf.co/jinaai/jina-code-embeddings-0.5b-GGUF:IQ2_XS || true
+        wait
+
+
+networks:
+  cognee-network:
+    name: cognee-network
+
+volumes:
+  chromadb_data:
+  postgres_data:
+  redis_data:
+  ollama_data:

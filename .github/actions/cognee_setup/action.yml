@@ -1,0 +1,44 @@
+name: cognee-setup
+description: "Sets up Python, installs uv, and installs dependencies for Cognee."
+
+inputs:
+  python-version:
+    description: "Which Python version to use"
+    required: false
+    default: "3.11.x"
+  extra-dependencies:
+    description: "Additional extra dependencies to install (space-separated)"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+
+    - name: Rebuild uv lockfile
+      shell: bash
+      run: |
+        rm uv.lock
+        uv lock
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        EXTRA_ARGS=""
+        if [ -n "${{ inputs.extra-dependencies }}" ]; then
+          IFS=' ' read -r -a deps <<< "${{ inputs.extra-dependencies }}"
+          for extra in "${deps[@]}"; do
+            EXTRA_ARGS="$EXTRA_ARGS --extra $extra"
+          done
+        fi
+        uv sync --extra api --extra docs --extra evals --extra codegraph --extra ollama --extra dev --extra neo4j --extra redis $EXTRA_ARGS
