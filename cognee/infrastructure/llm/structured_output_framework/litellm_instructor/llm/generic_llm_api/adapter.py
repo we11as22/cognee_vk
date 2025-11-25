@@ -54,12 +54,21 @@ class GenericAPIAdapter(LLMInterface):
         fallback_endpoint: str = None,
     ):
         self.name = name
-        self.model = model
+        # LiteLLM requires provider prefix for custom OpenAI-compatible APIs
+        # If model doesn't have a provider prefix (e.g., "openai/"), add "openai/" prefix
+        if "/" not in model:
+            self.model = f"openai/{model}"
+        else:
+            self.model = model
         self.api_key = api_key
         self.endpoint = endpoint
         self.max_completion_tokens = max_completion_tokens
 
-        self.fallback_model = fallback_model
+        # Apply same logic to fallback model
+        if fallback_model and "/" not in fallback_model:
+            self.fallback_model = f"openai/{fallback_model}"
+        else:
+            self.fallback_model = fallback_model
         self.fallback_api_key = fallback_api_key
         self.fallback_endpoint = fallback_endpoint
 

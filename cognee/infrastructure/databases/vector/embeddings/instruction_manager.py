@@ -12,34 +12,24 @@ InstructionRole = Literal["query", "passage"]
 
 INSTRUCTION_CONFIG = {
     "nl2code": {
-        "query": "Find the most relevant code snippet given the following query:
-",
-        "passage": "Candidate code snippet:
-",
+        "query": "Find the most relevant code snippet given the following query:\n",
+        "passage": "Candidate code snippet:\n",
     },
     "qa": {
-        "query": "Find the most relevant answer given the following question:
-",
-        "passage": "Candidate answer:
-",
+        "query": "Find the most relevant answer given the following question:\n",
+        "passage": "Candidate answer:\n",
     },
     "code2code": {
-        "query": "Find an equivalent code snippet given the following code snippet:
-",
-        "passage": "Candidate code snippet:
-",
+        "query": "Find an equivalent code snippet given the following code snippet:\n",
+        "passage": "Candidate code snippet:\n",
     },
     "code2nl": {
-        "query": "Find the most relevant comment given the following code snippet:
-",
-        "passage": "Candidate comment:
-",
+        "query": "Find the most relevant comment given the following code snippet:\n",
+        "passage": "Candidate comment:\n",
     },
     "code2completion": {
-        "query": "Find the most relevant completion given the following start of code snippet:
-",
-        "passage": "Candidate completion:
-",
+        "query": "Find the most relevant completion given the following start of code snippet:\n",
+        "passage": "Candidate completion:\n",
     },
 }
 
