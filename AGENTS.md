@@ -143,6 +143,19 @@ These rules define how coding agents should use the Cognee MCP server as a **cod
   - The **agent’s view of the filesystem** (the user’s workspace in the IDE) is the ground truth for code.
   - Cognee’s memory is a **derived, eventually consistent index**. If there is a conflict between what you see in files and what Cognee returns, trust the files and refresh Cognee.
 
+- **Role separation: MCP = search/memory, main LLM = reasoning/code**
+  - Treat Cognee MCP strictly as:
+    - a **search / retrieval / memory layer** over code and documents,
+    - not as the component that “decides” how to change code.
+  - Use the IDE’s main LLM/agent for:
+    - planning changes,
+    - writing or editing code,
+    - making architectural decisions.
+  - Use Cognee MCP only to:
+    - find relevant files, functions, and contexts,
+    - surface relationships and summaries,
+    - recall past interactions and developer rules.
+
 - **How to ingest code (any repo, changing over time)**
   - For any task that needs semantic/code‑graph context, first ensure the relevant code is ingested:
     - Build a **text snapshot** from the current filesystem:
@@ -197,7 +210,8 @@ These rules define how coding agents should use the Cognee MCP server as a **cod
     - Continuously keep the currently relevant parts of the user’s codebase in sync via `cognify` (initial and incremental snapshots).
     - Use `search` (especially `CODE` and `GRAPH_COMPLETION`) as your primary interface to that memory when:
       - answering questions about the code,
-      - planning edits,
-      - or guiding refactors/tests over a codebase that may change at any time.
+      - gathering context for planned edits or refactors,
+      - selecting the right locations to modify,
+      - but leave the actual code generation and decision‑making to the main LLM/agent, not to this MCP server.
 
 
