@@ -176,6 +176,34 @@ To open the local UI, run:
 cognee-cli -ui
 ```
 
+## Docker + MCP usage in this project
+
+When using this repository as a Docker‑based stack with an MCP server for IDE integration:
+
+- Start all services (API, MCP, Ollama, databases, etc.) with:
+
+```bash
+docker compose --profile "*" up
+```
+
+- Configure your MCP client (e.g. Cursor) to connect to the SSE endpoint exposed by the `cognee-mcp` service.  
+  Example `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "cognee": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "sse",
+      "url": "http://localhost:8001/sse"
+    }
+  }
+}
+```
+
+The Docker compose file maps the internal MCP port `8000` to host port `8001`, so MCP clients should always use `http://localhost:8001/sse` as the connection URL.
+
 ## Demos & Examples
 
 See Cognee in action:
