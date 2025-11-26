@@ -66,52 +66,11 @@ async def run_sse_with_cors():
     sse_app = mcp.sse_app()
     sse_app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins for flexibility
+        allow_origins=["http://localhost:3000"],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET"],
         allow_headers=["*"],
     )
-    
-    # FastMCP SSE uses root path "/" by default
-    # Add /sse endpoint that forwards to the root SSE handler
-    from starlette.routing import Mount
-    from starlette.applications import Starlette
-    
-    # Get the root SSE handler
-    root_route = None
-    for route in sse_app.routes:
-        if route.path == "/" or route.path == "":
-            root_route = route
-            break
-    
-    # Log available routes for debugging
-    logger.info(f"SSE app routes: {[route.path for route in sse_app.routes]}")
-    
-    # Find root SSE handler (FastMCP typically uses "/" or "" for SSE)
-    root_route = None
-    for route in sse_app.routes:
-        if route.path == "/" or route.path == "":
-            root_route = route
-            break
-    
-    if root_route:
-        # Add /sse route that uses the same handler as root
-        async def sse_endpoint(request):
-            return await root_route.endpoint(request)
-        
-        sse_app.add_route("/sse", sse_endpoint, methods=["GET", "OPTIONS"])
-        logger.info("Added /sse endpoint for SSE transport")
-    else:
-        # If no root route found, try to add a basic SSE endpoint
-        logger.warning("No root SSE route found, adding basic /sse endpoint")
-        async def basic_sse_endpoint(request):
-            # Try to get the first available route handler
-            if sse_app.routes:
-                first_route = sse_app.routes[0]
-                return await first_route.endpoint(request)
-            return JSONResponse({"error": "SSE not configured"}, status_code=404)
-        
-        sse_app.add_route("/sse", basic_sse_endpoint, methods=["GET", "OPTIONS"])
 
     config = uvicorn.Config(
         sse_app,
