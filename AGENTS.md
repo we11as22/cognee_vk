@@ -130,3 +130,74 @@ MCP server and Frontend:
 Our GitHub Actions run the same ruff checks and pytest suites shown above (`.github/workflows/basic_tests.yml` and related workflows). Use the commands in this document locally to minimize CI surprises.
 
 
+
+## MCP as Code Runtime for Agents (API Mode Rules)
+
+These rules define how coding agents should use the Cognee MCP server as a **code runtime memory** in **API mode** (MCP ↔ FastAPI on port 8000) for **any, constantly changing codebase**.
+
+- **Connection & Transport**
+  - Assume the MCP server is exposed via SSE at `http://localhost:8001/sse` (host → MCP container port `8001:8000`).
+  - Never call the Cognee FastAPI (`http://localhost:8000`) directly from the agent. All interaction must go through MCP tools.
+
+- **Source of truth for code**
+  - The **agent’s view of the filesystem** (the user’s workspace in the IDE) is the ground truth for code.
+  - Cognee’s memory is a **derived, eventually consistent index**. If there is a conflict between what you see in files and what Cognee returns, trust the files and refresh Cognee.
+
+- **How to ingest code (any repo, changing over time)**
+  - For any task that needs semantic/code‑graph context, first ensure the relevant code is ingested:
+    - Build a **text snapshot** from the current filesystem:
+      - Prefer scoping to the **minimal relevant set** of files (e.g. current project, module, or changed files), not the entire monorepo.
+      - Explicitly include file paths and short headers, e.g.:
+        - `File app/api/users.py:\n<contents>\n\nFile app/models/user.py:\n<contents>\n...`
+    - Call MCP tool `cognify` with:
+      - `data`: the snapshot text,
+      - `instruction_type="nl2code"` for “natural language ↔ code” workflows.
+  - For **incremental updates**:
+    - On edits, re‑ingest only the **changed files or modules** rather than the whole repo.
+    - It is acceptable to send updated snapshots of the same file; Cognee will de‑duplicate/merge internally.
+  - Do **not** assume Cognee automatically tracks live file changes — ingestion must be triggered explicitly by the agent via `cognify`.
+
+- **How to navigate the codebase**
+  - Use MCP `search` as the primary navigation primitive over ingested code:
+    - `search_type="CODE"`:
+      - For finding definitions, usages, related files, architectural relationships.
+      - Use when you need “where is X implemented/used and what else is related to it?”.
+    - `search_type="CHUNKS"`:
+      - For text‑level queries (“find this snippet / symbol / string / comment”).
+    - `search_type="GRAPH_COMPLETION"` with `instruction_type="nl2code"`:
+      - For higher‑level reasoning over the codebase (design, data‑flow, responsibilities).
+  - Before relying on search results, ensure that:
+    - the files you care about have been ingested **after** their last change;
+    - if not sure, re‑run `cognify` on those paths first.
+
+- **Tool availability and expectations in API mode**
+  - **Fully supported in API mode** and recommended for code workflows:
+    - `cognify` — transforms added data into a structured knowledge graph.
+    - `cognee_add_developer_rules` — ingests rule/config files (including `AGENTS.md`, `.cursorrules`, etc.).
+    - `search` — all search types, including `CODE`, `GRAPH_COMPLETION`, `CHUNKS`, `SUMMARIES`, `CYPHER`, `FEELING_LUCKY`.
+    - `list_data`, `delete`, `prune`, `save_interaction`.
+  - **API‑mode limitations (do NOT build control flow on these):**
+    - `cognify_status` / `codify_status`:
+      - In API mode, they only report that pipeline status is not available (no HTTP endpoint exists yet).
+      - Do not rely on them for progress tracking; treat `cognify` as fire‑and‑forget.
+    - `codify`:
+      - In API mode, returns an explicit “codify is not available” message.
+      - Use `cognify(data=code_snapshot) + search(search_type="CODE")` as the standard pattern for code navigation instead.
+
+- **Safety and data management**
+  - Prefer:
+    - `list_data` to inspect what datasets/data are present.
+    - `delete(mode="soft")` to remove specific outdated snapshots.
+  - Use `prune` **only** when intentionally resetting the entire memory (e.g. switching to a completely different long‑running workspace).
+  - When working across multiple projects:
+    - Encode the project/root path in your snapshots’ headers so search results remain distinguishable (e.g. `Project: project_a`, `File project_a/app/main.py: ...`).
+
+- **Goal for agents**
+  - Treat Cognee MCP as a **long‑lived, code‑aware runtime memory layer**:
+    - Continuously keep the currently relevant parts of the user’s codebase in sync via `cognify` (initial and incremental snapshots).
+    - Use `search` (especially `CODE` and `GRAPH_COMPLETION`) as your primary interface to that memory when:
+      - answering questions about the code,
+      - planning edits,
+      - or guiding refactors/tests over a codebase that may change at any time.
+
+
