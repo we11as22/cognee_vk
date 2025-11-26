@@ -25,11 +25,11 @@ services:
     ports:
       - 8000:8000
       - 5678:5678 # Debugger port
-    deploy:
-      resources:
-        limits:
-          cpus: "4.0"
-          memory: 8GB
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "4.0"
+    #       memory: 8GB
 
   # Cognee MCP Server - Model Context Protocol server for IDE integration
   cognee-mcp:
@@ -43,11 +43,17 @@ services:
       dockerfile: cognee-mcp/Dockerfile
     volumes:
       - .env:/app/.env
+      # Mount local cognee source so MCP uses the same version (including instruction_manager)
+      - ./cognee:/app/cognee
     environment:
       - DEBUG=false # Change to true if debugging
       - ENVIRONMENT=local
       - LOG_LEVEL=INFO
       - TRANSPORT_MODE=sse
+      # Run MCP in API mode against the main cognee API container
+      # This ensures a single source of truth for DB, embeddings and LLMs.
+      # Using host.docker.internal avoids Docker DNS issues resolving "cognee" from this container.
+      - API_URL=http://host.docker.internal:8000
       # Database configuration - should match the main cognee service
       - DB_PROVIDER=${DB_PROVIDER:-sqlite}
       - DB_HOST=${DB_HOST:-host.docker.internal}
@@ -61,13 +67,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000" # MCP port
-      - "5678:5678" # MCP debugger port
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 4GB
+      # Expose MCP on a different host port to avoid clashing with the main API (8000)
+      - "8001:8000" # MCP port (host:container)
+      - "5679:5679" # MCP debugger port
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "2.0"
+    #       memory: 4GB
 
   # NOTE: Frontend is a work in progress and supports minimum amount of features required to be functional.
   # If you want to use Cognee with a UI environment you can integrate the Cognee MCP Server into Cursor / Claude Desktop / Visual Studio Code (through Cline/Roo)
@@ -171,11 +178,11 @@ services:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_KEEP_ALIVE=24h
       - OLLAMA_ORIGINS=*
-    deploy:
-      resources:
-        limits:
-          cpus: "4.0"
-          memory: 8GB
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "4.0"
+    #       memory: 8GB
     healthcheck:
       test: ["CMD-SHELL", "ollama list || exit 1"]
       interval: 30s

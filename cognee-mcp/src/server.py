@@ -1171,6 +1171,52 @@ async def main():
     # Initialize the global CogneeClient
     cognee_client = CogneeClient(api_url=args.api_url, api_token=args.api_token)
 
+    # --- Startup diagnostics: API/LLM/embeddings ---------------------------------
+    try:
+        if cognee_client.use_api and cognee_client.api_url:
+            # In API mode, hit the FastAPI health endpoint so that:
+            # - relational/vector/graph DBs are checked
+            # - LLM and embedding connections are exercised
+            import httpx
+
+            health_url = f"{cognee_client.api_url.rstrip('/')}/health/detailed"
+            logger.info(f"Running startup health check against Cognee API: {health_url}")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(health_url, headers=cognee_client._get_headers())
+            logger.info(
+                "Cognee API health response: %s %s",
+                resp.status_code,
+                resp.text[:500],
+            )
+        else:
+            # In direct mode, explicitly test LLM and embedding connectivity once on startup.
+            try:
+                from cognee.infrastructure.llm.utils import (
+                    test_llm_connection,
+                    test_embedding_connection,
+                )
+
+                logger.info("Running startup LLM connection test from MCP server...")
+                await test_llm_connection()
+                logger.info("LLM connection test succeeded.")
+
+                logger.info("Running startup embedding connection test from MCP server...")
+                await test_embedding_connection()
+                logger.info("Embedding connection test succeeded.")
+            except Exception:
+                logger.error(
+                    "Startup LLM/embedding connectivity test failed in direct mode.",
+                    exc_info=True,
+                )
+    except Exception:
+        logger.error(
+            "Startup health check against Cognee backend failed. "
+            "MCP server will still start, but tools may not function correctly.",
+            exc_info=True,
+        )
+    # ---------------------------------------------------------------------------
+
     mcp.settings.host = args.host
     mcp.settings.port = args.port
 
